@@ -76,7 +76,7 @@ jobs:
           node-version: ${{ matrix.node_version }}
 
       - name: Download Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: layer-node${{ matrix.node_version }}
           path: dist
@@ -115,7 +115,7 @@ jobs:
 
     steps:
       - name: Download Artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: layer-node${{ matrix.node_version }}
           path: dist
