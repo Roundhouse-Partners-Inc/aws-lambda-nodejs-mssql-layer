@@ -1,0 +1,8 @@
+{
+  "name": "aws-lambda-nodejs-mssql-layer",
+  "version": "1.0.0",
+  "description": "AWS Lambda Layer for Node.js with mssql (SQL Server connectivity)",
+  "dependencies": {
+    "mssql": "^11.0.1"
+  }
+}

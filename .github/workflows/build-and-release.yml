@@ -1,0 +1,143 @@
+name: Build and Release Lambda Layer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - '.github/workflows/build-and-release.yml'
+  workflow_dispatch:
+    inputs:
+      node_versions:
+        description: 'Node.js versions to build (comma-separated)'
+        required: false
+        default: '18,20,22'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '18,20,22')) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Layer
+        run: |
+          chmod +x build.sh
+          ./build.sh ${{ matrix.node_version }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: layer-node${{ matrix.node_version }}
+          path: dist/*.zip
+          retention-days: 30
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '18,20,22')) }}
+
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: TestPassword123!
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'TestPassword123!' -Q 'SELECT 1' -C"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node_version }}
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: layer-node${{ matrix.node_version }}
+          path: dist
+
+      - name: Extract Layer
+        run: |
+          cd dist
+          unzip *.zip
+          cd ..
+
+      - name: Run Tests
+        env:
+          NODE_PATH: ./dist/nodejs/node_modules
+          DB_SERVER: localhost
+          DB_USER: sa
+          DB_PWD: TestPassword123!
+          DB_NAME: master
+          DB_PORT: 1433
+        run: |
+          node test/connection-test.js
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '18,20,22')) }}
+        account:
+          - name: legacy
+            id: '919311966619'
+            region: us-east-2
+          - name: production
+            id: '344349181969'
+            region: us-east-2
+
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: layer-node${{ matrix.node_version }}
+          path: dist
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::386930771048:role/GitHubActionsDeployRole
+          aws-region: us-east-1
+
+      - name: Assume Cross-Account Role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ matrix.account.id }}:role/GitHubActionsCrossAccountRole
+          aws-region: ${{ matrix.account.region }}
+          role-chaining: true
+
+      - name: Publish Layer
+        run: |
+          aws lambda publish-layer-version \
+            --layer-name nodejs-mssql-layer \
+            --description "Node.js ${{ matrix.node_version }} mssql layer ($(date +%Y-%m-%d))" \
+            --compatible-runtimes nodejs${{ matrix.node_version }}.x \
+            --zip-file fileb://dist/nodejs-mssql-layer-node${{ matrix.node_version }}.zip \
+            --region ${{ matrix.account.region }}
