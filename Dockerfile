@@ -2,7 +2,9 @@ ARG NODE_VERSION=22
 FROM public.ecr.aws/lambda/nodejs:${NODE_VERSION} AS builder
 
 # Install build tools needed for native modules
-RUN dnf install -y gcc gcc-c++ make python3
+# Node 18 uses Amazon Linux 2 (yum), Node 20+ uses AL2023 (dnf)
+RUN (command -v dnf && dnf install -y gcc gcc-c++ make python3) || \
+    (command -v yum && yum install -y gcc gcc-c++ make python3)
 
 # Create layer directory structure
 WORKDIR /opt/nodejs
