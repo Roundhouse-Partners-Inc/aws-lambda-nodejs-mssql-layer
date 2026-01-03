@@ -1,0 +1,93 @@
+name: Check for Runtime Updates
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Weekly on Monday at 9am UTC
+  workflow_dispatch:
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Get supported Lambda Node.js versions
+        id: nodejs
+        run: |
+          # Get versions from AWS docs, filter to supported (18+)
+          VERSIONS=$(curl -s "https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html" | \
+            grep -oP 'nodejs\d+\.x' | grep -oP '\d+' | sort -n | uniq | \
+            awk '$1 >= 18' | tr '\n' ',' | sed 's/,$//')
+          [ -z "$VERSIONS" ] && VERSIONS="18,20,22"
+          echo "versions=$VERSIONS" >> $GITHUB_OUTPUT
+
+          # Convert to JSON array for matrix
+          JSON_ARRAY=$(echo "$VERSIONS" | sed 's/,/","/g' | sed 's/^/["/' | sed 's/$/"]/')
+          echo "json_array=$JSON_ARRAY" >> $GITHUB_OUTPUT
+
+      - name: Get latest mssql npm version
+        id: mssql
+        run: |
+          LATEST=$(npm view mssql version)
+          [ -z "$LATEST" ] && LATEST="12.0.0"
+          echo "version=$LATEST" >> $GITHUB_OUTPUT
+
+      - name: Get current versions
+        id: current
+        run: |
+          NODE_VERSIONS=$(grep -oP 'node_version: \["\K[^"]+' .github/workflows/build-and-release.yml | head -1 || echo "18")
+          MSSQL=$(grep -oP '"mssql": "\^\K[^"]+' package.json || echo "11.0.1")
+          echo "node=$NODE_VERSIONS" >> $GITHUB_OUTPUT
+          echo "mssql=$MSSQL" >> $GITHUB_OUTPUT
+
+      - name: Determine updates needed
+        id: update
+        run: |
+          NEW_NODE="${{ steps.nodejs.outputs.versions }}"
+          NEW_MSSQL="${{ steps.mssql.outputs.version }}"
+          CURRENT_MSSQL="${{ steps.current.outputs.mssql }}"
+
+          # Check if mssql major version changed
+          NEW_MAJOR=$(echo $NEW_MSSQL | cut -d. -f1)
+          CURRENT_MAJOR=$(echo $CURRENT_MSSQL | cut -d. -f1)
+
+          NEEDS_UPDATE=false
+          [ "$NEW_MAJOR" != "$CURRENT_MAJOR" ] && NEEDS_UPDATE=true
+
+          echo "node_versions=$NEW_NODE" >> $GITHUB_OUTPUT
+          echo "node_json=${{ steps.nodejs.outputs.json_array }}" >> $GITHUB_OUTPUT
+          echo "mssql_new=$NEW_MSSQL" >> $GITHUB_OUTPUT
+          echo "needs_update=$NEEDS_UPDATE" >> $GITHUB_OUTPUT
+
+      - name: Update package.json
+        if: steps.update.outputs.needs_update == 'true'
+        run: |
+          MSSQL="${{ steps.update.outputs.mssql_new }}"
+          MAJOR=$(echo $MSSQL | cut -d. -f1)
+          sed -i "s/\"mssql\": \"\\^[^\"]*\"/\"mssql\": \"^$MAJOR.0.0\"/" package.json
+          npm install --package-lock-only
+
+      - name: Update workflow matrix
+        if: steps.update.outputs.needs_update == 'true'
+        run: |
+          NODE_JSON="${{ steps.update.outputs.node_json }}"
+          sed -i "s/node_version: \[.*\]/node_version: $NODE_JSON/" .github/workflows/build-and-release.yml
+
+      - name: Commit and push
+        if: steps.update.outputs.needs_update == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add package.json package-lock.json .github/workflows/build-and-release.yml
+          git commit -m "chore: update dependencies
+
+          Node.js versions: ${{ steps.update.outputs.node_versions }}
+          mssql: ${{ steps.update.outputs.mssql_new }}"
+
+          git push origin main
