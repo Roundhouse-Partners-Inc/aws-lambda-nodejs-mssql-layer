@@ -13,7 +13,7 @@ on:
       node_versions:
         description: 'Node.js versions to build (comma-separated)'
         required: false
-        default: '18,20,22'
+        default: '20,22,24'
 
 permissions:
   contents: write
@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '18,20,22')) }}
+        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '20,22,24')) }}
 
     steps:
       - name: Checkout
@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '18,20,22')) }}
+        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '20,22,24')) }}
 
     services:
       mssql:
@@ -104,7 +104,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     strategy:
       matrix:
-        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '18,20,22')) }}
+        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '20,22,24')) }}
         account:
           - name: legacy
             id: '919311966619'
