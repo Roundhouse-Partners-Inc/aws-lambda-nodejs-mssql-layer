@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "description": "AWS Lambda Layer for Node.js with mssql (SQL Server connectivity)",
   "dependencies": {
-    "mssql": "^9.3.2"
+    "mssql": "^12.2.0"
   }
 }
