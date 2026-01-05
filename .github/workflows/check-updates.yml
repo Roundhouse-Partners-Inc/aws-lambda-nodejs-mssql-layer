@@ -43,8 +43,9 @@ jobs:
       - name: Get current versions
         id: current
         run: |
-          NODE_VERSIONS=$(grep -oP 'node_version: \["\K[^"]+' .github/workflows/build-and-release.yml | head -1 || echo "18")
-          MSSQL=$(grep -oP '"mssql": "\^\K[^"]+' package.json || echo "11.0.1")
+          # Extract current Node.js versions from workflow matrix
+          NODE_VERSIONS=$(grep -oP "node_versions || '\K[^']+" .github/workflows/build-and-release.yml | head -1 || echo "20,22,24")
+          MSSQL=$(grep -oP '"mssql": "\^\K[^"]+' package.json || echo "12.0.0")
           echo "node=$NODE_VERSIONS" >> $GITHUB_OUTPUT
           echo "mssql=$MSSQL" >> $GITHUB_OUTPUT
 
@@ -53,22 +54,38 @@ jobs:
         run: |
           NEW_NODE="${{ steps.nodejs.outputs.versions }}"
           NEW_MSSQL="${{ steps.mssql.outputs.version }}"
+          CURRENT_NODE="${{ steps.current.outputs.node }}"
           CURRENT_MSSQL="${{ steps.current.outputs.mssql }}"
 
           # Check if mssql major version changed
-          NEW_MAJOR=$(echo $NEW_MSSQL | cut -d. -f1)
-          CURRENT_MAJOR=$(echo $CURRENT_MSSQL | cut -d. -f1)
+          NEW_MSSQL_MAJOR=$(echo $NEW_MSSQL | cut -d. -f1)
+          CURRENT_MSSQL_MAJOR=$(echo $CURRENT_MSSQL | cut -d. -f1)
 
           NEEDS_UPDATE=false
-          [ "$NEW_MAJOR" != "$CURRENT_MAJOR" ] && NEEDS_UPDATE=true
+          MSSQL_CHANGED=false
+          NODE_CHANGED=false
+
+          # Detect mssql major version change
+          if [ "$NEW_MSSQL_MAJOR" != "$CURRENT_MSSQL_MAJOR" ]; then
+            NEEDS_UPDATE=true
+            MSSQL_CHANGED=true
+          fi
+
+          # Detect Node.js version change
+          if [ "$NEW_NODE" != "$CURRENT_NODE" ]; then
+            NEEDS_UPDATE=true
+            NODE_CHANGED=true
+          fi
 
           echo "node_versions=$NEW_NODE" >> $GITHUB_OUTPUT
           echo "node_json=${{ steps.nodejs.outputs.json_array }}" >> $GITHUB_OUTPUT
           echo "mssql_new=$NEW_MSSQL" >> $GITHUB_OUTPUT
           echo "needs_update=$NEEDS_UPDATE" >> $GITHUB_OUTPUT
+          echo "mssql_changed=$MSSQL_CHANGED" >> $GITHUB_OUTPUT
+          echo "node_changed=$NODE_CHANGED" >> $GITHUB_OUTPUT
 
       - name: Update package.json
-        if: steps.update.outputs.needs_update == 'true'
+        if: steps.update.outputs.mssql_changed == 'true'
         run: |
           MSSQL="${{ steps.update.outputs.mssql_new }}"
           MAJOR=$(echo $MSSQL | cut -d. -f1)
@@ -76,36 +93,48 @@ jobs:
           npm install --package-lock-only
 
       - name: Update workflow matrix
-        if: steps.update.outputs.needs_update == 'true'
+        if: steps.update.outputs.node_changed == 'true'
         run: |
           NODE_JSON="${{ steps.update.outputs.node_json }}"
-          sed -i "s/node_version: \[.*\]/node_version: $NODE_JSON/" .github/workflows/build-and-release.yml
+          # Update the default node_versions in the workflow
+          sed -i "s/default: '[0-9,]*'/default: '${{ steps.update.outputs.node_versions }}'/" .github/workflows/build-and-release.yml
 
       - name: Create PR for updates
         if: steps.update.outputs.needs_update == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH="chore/update-dependencies-$(date +%Y%m%d)"
+          BRANCH="chore/update-runtimes-$(date +%Y%m%d)"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git checkout -b "$BRANCH"
-          git add package.json package-lock.json .github/workflows/build-and-release.yml
-          git commit -m "chore: update dependencies
+          # Build commit message and PR body based on what changed
+          CHANGES=""
+          FILES_TO_ADD=""
 
-          Node.js versions: ${{ steps.update.outputs.node_versions }}
-          mssql: ${{ steps.update.outputs.mssql_new }}"
+          if [ "${{ steps.update.outputs.node_changed }}" == "true" ]; then
+            CHANGES="${CHANGES}- Node.js Lambda runtimes: ${{ steps.update.outputs.node_versions }}\n"
+            FILES_TO_ADD="${FILES_TO_ADD} .github/workflows/build-and-release.yml"
+          fi
+
+          if [ "${{ steps.update.outputs.mssql_changed }}" == "true" ]; then
+            CHANGES="${CHANGES}- mssql package: ${{ steps.update.outputs.mssql_new }}\n"
+            FILES_TO_ADD="${FILES_TO_ADD} package.json package-lock.json"
+          fi
+
+          git checkout -b "$BRANCH"
+          git add $FILES_TO_ADD
+          git commit -m "chore: update Lambda runtimes
+
+          $(echo -e "$CHANGES")"
 
           git push origin "$BRANCH"
 
           gh pr create \
-            --title "chore: update dependencies" \
+            --title "chore: update Lambda runtimes" \
             --body "## Summary
-          - Node.js versions: ${{ steps.update.outputs.node_versions }}
-          - mssql: ${{ steps.update.outputs.mssql_new }}
-
+          $(echo -e "$CHANGES")
           This PR was automatically generated by the Check for Runtime Updates workflow." \
             --base main \
             --head "$BRANCH"
