@@ -43,8 +43,8 @@ jobs:
       - name: Get current versions
         id: current
         run: |
-          # Extract current Node.js versions from workflow matrix
-          NODE_VERSIONS=$(grep -oP "node_versions || '\K[^']+" .github/workflows/build-and-release.yml | head -1 || echo "20,22,24")
+          # Extract current Node.js versions from versions.json
+          NODE_VERSIONS=$(cat versions.json | jq -r '.node_versions | join(",")')
           MSSQL=$(grep -oP '"mssql": "\^\K[^"]+' package.json || echo "12.0.0")
           echo "node=$NODE_VERSIONS" >> $GITHUB_OUTPUT
           echo "mssql=$MSSQL" >> $GITHUB_OUTPUT
@@ -92,12 +92,12 @@ jobs:
           sed -i "s/\"mssql\": \"\\^[^\"]*\"/\"mssql\": \"^$MAJOR.0.0\"/" package.json
           npm install --package-lock-only
 
-      - name: Update workflow matrix
+      - name: Update versions.json
         if: steps.update.outputs.node_changed == 'true'
         run: |
           NODE_JSON="${{ steps.update.outputs.node_json }}"
-          # Update the default node_versions in the workflow
-          sed -i "s/default: '[0-9,]*'/default: '${{ steps.update.outputs.node_versions }}'/" .github/workflows/build-and-release.yml
+          # Update versions.json with new Node.js versions
+          echo "{\"node_versions\": $NODE_JSON}" | jq '.' > versions.json
 
       - name: Create PR for updates
         if: steps.update.outputs.needs_update == 'true'
@@ -115,7 +115,7 @@ jobs:
 
           if [ "${{ steps.update.outputs.node_changed }}" == "true" ]; then
             CHANGES="${CHANGES}- Node.js Lambda runtimes: ${{ steps.update.outputs.node_versions }}\n"
-            FILES_TO_ADD="${FILES_TO_ADD} .github/workflows/build-and-release.yml"
+            FILES_TO_ADD="${FILES_TO_ADD} versions.json"
           fi
 
           if [ "${{ steps.update.outputs.mssql_changed }}" == "true" ]; then

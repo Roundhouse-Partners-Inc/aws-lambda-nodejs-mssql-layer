@@ -6,25 +6,44 @@ on:
     paths:
       - 'package.json'
       - 'package-lock.json'
+      - 'versions.json'
       - 'Dockerfile'
       - '.github/workflows/build-and-release.yml'
   workflow_dispatch:
     inputs:
       node_versions:
-        description: 'Node.js versions to build (comma-separated)'
+        description: 'Node.js versions to build (JSON array, e.g. ["20","22"])'
         required: false
-        default: '20,22,24'
 
 permissions:
   contents: write
   id-token: write
 
 jobs:
+  load-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      node_versions: ${{ steps.versions.outputs.node_versions }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Load versions
+        id: versions
+        run: |
+          if [ -n "${{ inputs.node_versions }}" ]; then
+            echo "node_versions=${{ inputs.node_versions }}" >> $GITHUB_OUTPUT
+          else
+            VERSIONS=$(cat versions.json | jq -c '.node_versions')
+            echo "node_versions=$VERSIONS" >> $GITHUB_OUTPUT
+          fi
+
   build:
+    needs: load-versions
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '20,22,24')) }}
+        node_version: ${{ fromJson(needs.load-versions.outputs.node_versions) }}
 
     steps:
       - name: Checkout
@@ -46,11 +65,11 @@ jobs:
           retention-days: 30
 
   test:
-    needs: build
+    needs: [load-versions, build]
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '20,22,24')) }}
+        node_version: ${{ fromJson(needs.load-versions.outputs.node_versions) }}
 
     services:
       mssql:
@@ -99,12 +118,12 @@ jobs:
           node test/connection-test.js
 
   publish:
-    needs: test
+    needs: [load-versions, test]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     strategy:
       matrix:
-        node_version: ${{ fromJson(format('[{0}]', inputs.node_versions || '20,22,24')) }}
+        node_version: ${{ fromJson(needs.load-versions.outputs.node_versions) }}
         account:
           - name: legacy
             id: '919311966619'
