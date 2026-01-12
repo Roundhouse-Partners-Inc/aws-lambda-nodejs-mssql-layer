@@ -106,6 +106,13 @@ jobs:
         run: |
           BRANCH="chore/update-runtimes-$(date +%Y%m%d)"
 
+          # Check if a PR already exists for this branch
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #$EXISTING_PR already exists for branch $BRANCH, skipping"
+            exit 0
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
@@ -122,6 +129,9 @@ jobs:
             CHANGES="${CHANGES}- mssql package: ${{ steps.update.outputs.mssql_new }}\n"
             FILES_TO_ADD="${FILES_TO_ADD} package.json package-lock.json"
           fi
+
+          # Delete existing remote branch if it exists (stale from failed run)
+          git push origin --delete "$BRANCH" 2>/dev/null || true
 
           git checkout -b "$BRANCH"
           git add $FILES_TO_ADD
