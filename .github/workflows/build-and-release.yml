@@ -181,13 +181,13 @@ jobs:
           path: dist
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::386930771048:role/GitHubActionsDeployRole
           aws-region: us-east-1
 
       - name: Assume Cross-Account Role
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::${{ matrix.account.id }}:role/GitHubActionsCrossAccountRole
           aws-region: ${{ matrix.account.region }}
