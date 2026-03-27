@@ -47,7 +47,7 @@ There is no test framework — `test/connection-test.js` is a standalone script 
 
 Three GitHub Actions workflows:
 
-1. **`build-and-release.yml`** — Builds and tests on push to main. On version tags (`v*.*.*`), also creates a GitHub Release and publishes layers to AWS (Legacy + Production accounts via OIDC chain through SharedServices).
+1. **`build-and-release.yml`** — Builds and tests on push to main. On version tags (`v*.*.*`), also creates a GitHub Release and publishes layers to AWS (Production account via OIDC chain through SharedServices).
 2. **`check-updates.yml`** — Weekly cron checks for new Lambda runtimes and mssql versions; opens a PR if changes found.
 3. **`dependabot-auto-merge.yml`** — Auto-merges minor/patch dependabot PRs.
 
@@ -55,8 +55,7 @@ Three GitHub Actions workflows:
 
 ## AWS Publishing Targets
 
-Layers publish to two accounts via OIDC role chaining:
-- Legacy (919311966619)
+Layers publish to Production via OIDC role chaining:
 - Production (344349181969)
 
 Authentication: GitHub OIDC → SharedServices (386930771048) `GitHubActionsDeployRole` → target account `GitHubActionsCrossAccountRole`.

@@ -156,7 +156,7 @@ jobs:
             - Node.js 24.x
 
             ## Usage
-            Download the zip for your Node.js version and create a Lambda layer, or use the pre-published layers in the Legacy/Production AWS accounts.
+            Download the zip for your Node.js version and create a Lambda layer, or use the pre-published layers in the Production AWS account.
 
   publish:
     needs: [load-versions, test, release]

@@ -39,7 +39,7 @@ exports.handler = async (event) => {
 ```bash
 aws lambda update-function-configuration \
   --function-name my-function \
-  --layers arn:aws:lambda:us-east-2:919311966619:layer:nodejs-mssql-layer:1
+  --layers arn:aws:lambda:us-east-1:344349181969:layer:nodejs-mssql-layer:56
 ```
 
 ## Local Development
@@ -72,7 +72,7 @@ The GitHub Actions workflow automatically:
 
 1. Builds layers for Node.js 18, 20, and 22
 2. Tests each layer against SQL Server in CI
-3. Publishes to Legacy and Production AWS accounts
+3. Publishes to Production AWS account (344349181969)
 
 ## Package Versions
 
