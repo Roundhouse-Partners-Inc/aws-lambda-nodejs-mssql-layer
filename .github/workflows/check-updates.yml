@@ -22,11 +22,15 @@ jobs:
       - name: Get supported Lambda Node.js versions
         id: nodejs
         run: |
-          # Get versions from AWS docs, filter to supported (18+)
-          VERSIONS=$(curl -s "https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html" | \
+          # Exclude the retired Node.js 18 runtime from discovery.
+          if ! VERSIONS=$(curl --fail --silent --show-error --max-time 30 "https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html" | \
             grep -oP 'nodejs\d+\.x' | grep -oP '\d+' | sort -n | uniq | \
-            awk '$1 >= 18' | tr '\n' ',' | sed 's/,$//')
-          [ -z "$VERSIONS" ] && VERSIONS="18,20,22"
+            awk '$1 >= 20' | tr '\n' ',' | sed 's/,$//'); then
+            VERSIONS=""
+          fi
+          if [ -z "$VERSIONS" ]; then
+            VERSIONS=$(jq -r '.node_versions | map(tonumber) | map(select(. >= 20)) | sort | unique | join(",")' versions.json)
+          fi
           echo "versions=$VERSIONS" >> $GITHUB_OUTPUT
 
           # Convert to JSON array for matrix

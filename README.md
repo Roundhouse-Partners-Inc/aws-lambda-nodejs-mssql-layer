@@ -4,9 +4,9 @@ AWS Lambda Layer providing [mssql](https://www.npmjs.com/package/mssql) for SQL 
 
 ## Supported Runtimes
 
-- Node.js 18.x
 - Node.js 20.x
 - Node.js 22.x
+- Node.js 24.x
 
 ## Usage
 
@@ -39,8 +39,12 @@ exports.handler = async (event) => {
 ```bash
 aws lambda update-function-configuration \
   --function-name my-function \
-  --layers arn:aws:lambda:us-east-1:344349181969:layer:nodejs-mssql-layer:56
+  --layers "arn:aws:lambda:us-east-1:344349181969:layer:nodejs-mssql-layer:${LAYER_VERSION}"
 ```
+
+Set `LAYER_VERSION` to the published layer version for your runtime from the
+release you intend to use. AWS layer version numbers differ from repository
+release tags.
 
 ## Local Development
 
@@ -70,12 +74,25 @@ DB_SERVER=localhost DB_USER=sa DB_PWD=TestPassword123! DB_NAME=master \
 
 The GitHub Actions workflow automatically:
 
-1. Builds layers for Node.js 18, 20, and 22
+1. Builds layers for the runtimes in `versions.json` (20, 22, and 24)
 2. Tests each layer against SQL Server in CI
-3. Publishes to Production AWS account (344349181969)
+3. Publishes to Production AWS account (344349181969) on version tags
+
+### Enable automated update pull requests
+
+In repository **Settings > Actions > General > Workflow permissions**, enable
+**Allow GitHub Actions to create and approve pull requests**. If the setting is
+locked, an organization administrator must enable it in the organization Actions
+policy first. The workflow already requests `contents: write` and
+`pull-requests: write`; those token scopes do not override this policy.
+
+After enabling the setting, run **Check for Runtime Updates** manually and verify
+that it creates an update PR when changes are available. Builds and SQL Server
+tests currently run on pushes to `main`; generated PR changes still need
+validation before merge.
 
 ## Package Versions
 
 | Package | Version |
 |---------|---------|
-| mssql   | ^11.0.1 |
+| mssql   | ^12.5.0 |

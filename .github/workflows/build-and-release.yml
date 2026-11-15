@@ -150,7 +150,6 @@ jobs:
             Lambda layer for SQL Server connectivity using the [mssql](https://www.npmjs.com/package/mssql) package.
 
             ## Supported Runtimes
-            - Node.js 18.x
             - Node.js 20.x
             - Node.js 22.x
             - Node.js 24.x
