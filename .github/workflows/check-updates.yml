@@ -103,10 +103,23 @@ jobs:
           # Update versions.json with new Node.js versions
           echo "{\"node_versions\": $NODE_JSON}" | jq '.' > versions.json
 
+      # The Roundhouse org does not allow GITHUB_TOKEN to create pull requests; a token
+      # from the "Roundhouse Project Automation" GitHub App is not subject to that block.
+      - name: Mint GitHub App token
+        if: steps.update.outputs.needs_update == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          # Client ID of "Roundhouse Project Automation" (public identifier, not a secret).
+          client-id: Iv23li0mvdQbuBqJ5q2u
+          private-key: ${{ secrets.RH_PROJECT_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Create PR for updates
         if: steps.update.outputs.needs_update == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           BRANCH="chore/update-runtimes-$(date +%Y%m%d)"
 
