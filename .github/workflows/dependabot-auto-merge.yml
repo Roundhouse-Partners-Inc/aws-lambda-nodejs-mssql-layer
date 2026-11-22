@@ -1,5 +1,12 @@
 name: Dependabot Auto-Merge
 
+# Approve and merge use a short-lived token from the "Roundhouse Project Automation"
+# GitHub App, not GITHUB_TOKEN: the Roundhouse org does not allow GITHUB_TOKEN to create
+# or approve pull requests, and that block does not apply to App tokens. An App-authored
+# merge also starts the `on: push` build on main, which a GITHUB_TOKEN merge would not.
+# Dependabot-triggered runs can read only Dependabot secrets, so RH_PROJECT_APP_PRIVATE_KEY
+# must exist as a Dependabot secret (Actions secret too, for other workflows).
+
 on:
   pull_request:
 
@@ -18,16 +25,48 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      # The App token has no `workflows` permission, so it cannot approve or merge a pull
+      # request that changes files under .github/workflows/ (Dependabot's github-actions
+      # updates do). Those pull requests are left open for a person to merge by hand; the
+      # remaining steps are skipped, so the run still ends green.
+      - name: Check for workflow file changes
+        id: files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          CHANGED=$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" --jq '.[].filename')
+          echo "Changed files:"
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -q '^\.github/workflows/'; then
+            echo "touches_workflows=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Changes .github/workflows/; leaving this pull request for manual merge."
+          else
+            echo "touches_workflows=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mint GitHub App token
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major' && steps.files.outputs.touches_workflows == 'false'
+        id: app-token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          # Client ID of "Roundhouse Project Automation" (public identifier, not a secret).
+          client-id: Iv23li0mvdQbuBqJ5q2u
+          private-key: ${{ secrets.RH_PROJECT_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Approve PR
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major' && steps.files.outputs.touches_workflows == 'false'
         run: gh pr review --approve "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Merge minor/patch updates
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major' && steps.files.outputs.touches_workflows == 'false'
         run: gh pr merge --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
