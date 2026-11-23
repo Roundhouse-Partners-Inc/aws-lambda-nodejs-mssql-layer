@@ -22,15 +22,14 @@ Requires Docker. Builds target `linux/amd64` using AWS Lambda base images from `
 
 ## Testing
 
-Tests require a running SQL Server instance:
+Tests require a running SQL Server instance. Run these database tests on the XPS or in CI -- never start Docker (or a SQL Server container) on the Mac; a guard hook refuses local container starts.
+
+- **Preferred:** push a branch or open a PR. The `test` job in `.github/workflows/build-and-release.yml` runs `test/connection-test.js` against a SQL Server service container for every runtime in `versions.json`.
+- **Interactive:** use the XPS test copy for this repo (see Roundhouse-Infrastructure `docs/xps-github-runners.md`) and run the test there against its SQL Server:
 
 ```bash
-# Start local SQL Server
-docker run -e 'ACCEPT_EULA=Y' -e 'MSSQL_SA_PASSWORD=TestPassword123!' \
-  -p 1433:1433 -d mcr.microsoft.com/mssql/server:2022-latest
-
-# Run connection test (set NODE_PATH if testing against built layer)
-DB_SERVER=localhost DB_USER=sa DB_PWD='TestPassword123!' DB_NAME=master \
+# On the XPS, not the Mac (set NODE_PATH if testing against the built layer)
+DB_SERVER=127.0.0.1 DB_USER=sa DB_PWD='<sa password>' DB_NAME=master \
   node test/connection-test.js
 ```
 

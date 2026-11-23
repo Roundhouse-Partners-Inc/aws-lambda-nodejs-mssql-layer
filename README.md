@@ -60,13 +60,19 @@ release tags.
 
 ### Run Tests
 
-```bash
-# Start SQL Server container
-docker run -e 'ACCEPT_EULA=Y' -e 'MSSQL_SA_PASSWORD=TestPassword123!' \
-  -p 1433:1433 -d mcr.microsoft.com/mssql/server:2022-latest
+The connection test needs a running SQL Server. Run it on the XPS or in CI --
+never start Docker (or a SQL Server container) on the Mac.
 
-# Run connection test
-DB_SERVER=localhost DB_USER=sa DB_PWD=TestPassword123! DB_NAME=master \
+- **Preferred:** push a branch or open a PR. The `test` job in
+  `.github/workflows/build-and-release.yml` runs `test/connection-test.js`
+  against a SQL Server service container for every runtime in `versions.json`.
+- **Interactive:** use the XPS test copy for this repo (see
+  Roundhouse-Infrastructure `docs/xps-github-runners.md`) and run the test
+  there against its SQL Server:
+
+```bash
+# On the XPS, not the Mac
+DB_SERVER=127.0.0.1 DB_USER=sa DB_PWD='<sa password>' DB_NAME=master \
   node test/connection-test.js
 ```
 
