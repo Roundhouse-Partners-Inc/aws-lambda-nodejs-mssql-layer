@@ -24,7 +24,7 @@ Requires Docker. Builds target `linux/amd64` using AWS Lambda base images from `
 
 Tests require a running SQL Server instance. Run these database tests on the XPS or in CI -- never start Docker (or a SQL Server container) on the Mac; a guard hook refuses local container starts.
 
-- **Preferred:** push a branch or open a PR. The `test` job in `.github/workflows/build-and-release.yml` runs `test/connection-test.js` against a SQL Server service container for every runtime in `versions.json`.
+- **Preferred:** open a PR against `main` (a branch push alone does not run CI). The `test` job in `.github/workflows/build-and-release.yml` runs `test/connection-test.js` against a SQL Server service container for every runtime in `versions.json`; the `Layer checks passed` job sums up build and test as one status check for branch protection.
 - **Interactive:** use the XPS test copy for this repo (see Roundhouse-Infrastructure `docs/xps-github-runners.md`) and run the test there against its SQL Server:
 
 ```bash
@@ -46,9 +46,9 @@ There is no test framework — `test/connection-test.js` is a standalone script 
 
 Three GitHub Actions workflows:
 
-1. **`build-and-release.yml`** — Builds and tests on push to main. On version tags (`v*.*.*`), also creates a GitHub Release and publishes layers to AWS (Production account via OIDC chain through SharedServices).
+1. **`build-and-release.yml`** — Builds and tests on every PR to main and on push to main. On version tags (`v*.*.*`), also creates a GitHub Release and publishes layers to AWS (Production account via OIDC chain through SharedServices).
 2. **`check-updates.yml`** — Weekly cron checks for new Lambda runtimes and mssql versions; opens a PR if changes found.
-3. **`dependabot-auto-merge.yml`** — Auto-merges minor/patch dependabot PRs.
+3. **`dependabot-auto-merge.yml`** — Auto-merges minor/patch dependabot PRs once required checks pass (`gh pr merge --auto`).
 
 **To release:** Create and push a version tag (e.g., `git tag v1.2.0 && git push origin v1.2.0`).
 
