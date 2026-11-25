@@ -68,6 +68,8 @@ never start Docker (or a SQL Server container) on the Mac.
   against a SQL Server service container for every runtime in `versions.json`.
   The `Layer checks passed` job passes only when every build and test passed;
   it is the status check `main` requires before a PR can merge.
+  Dependabot auto-merge relies on the repository's **Allow auto-merge** setting
+  (Settings > General); it must stay on, or `gh pr merge --auto` fails.
 - **Interactive:** use the XPS test copy for this repo (see
   Roundhouse-Infrastructure `docs/xps-github-runners.md`) and run the test
   there against its SQL Server:
@@ -96,8 +98,10 @@ policy first. The workflow already requests `contents: write` and
 `pull-requests: write`; those token scopes do not override this policy.
 
 After enabling the setting, run **Check for Runtime Updates** manually and verify
-that it creates an update PR when changes are available. Builds and SQL Server
-tests run on that PR like any other, and Dependabot auto-merge waits for them.
+that it creates an update PR when changes are available. That PR is opened with
+`GITHUB_TOKEN`, so its build and SQL Server test runs start in an
+approval-required state: someone with write access must select **Approve
+workflows to run** on the PR before they run and before it can merge.
 
 ## Package Versions
 
