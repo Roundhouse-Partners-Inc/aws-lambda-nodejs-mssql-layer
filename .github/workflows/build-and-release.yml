@@ -11,6 +11,11 @@ on:
       - 'versions.json'
       - 'Dockerfile'
       - '.github/workflows/build-and-release.yml'
+  # Every pull request to main builds the layers and runs the SQL Server test.
+  # No paths filter here: the "Layer checks passed" job below is a required
+  # status check on main, and a filtered-out run would leave it pending forever.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       node_versions:
@@ -120,6 +125,25 @@ jobs:
           DB_PORT: 1433
         run: |
           node test/connection-test.js
+
+  # One stable check name for branch protection to require. The matrix job names
+  # change whenever versions.json does; this one does not. It fails unless every
+  # build and every SQL Server test passed (a skipped or cancelled job counts as a
+  # failure).
+  checks-passed:
+    name: Layer checks passed
+    needs: [load-versions, build, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every build and test to pass
+        env:
+          LOAD_RESULT: ${{ needs.load-versions.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+        run: |
+          echo "load-versions: $LOAD_RESULT, build: $BUILD_RESULT, test: $TEST_RESULT"
+          [ "$LOAD_RESULT" = success ] && [ "$BUILD_RESULT" = success ] && [ "$TEST_RESULT" = success ]
 
   release:
     needs: [load-versions, test]

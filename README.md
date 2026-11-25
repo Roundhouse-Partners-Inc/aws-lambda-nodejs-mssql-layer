@@ -63,9 +63,11 @@ release tags.
 The connection test needs a running SQL Server. Run it on the XPS or in CI --
 never start Docker (or a SQL Server container) on the Mac.
 
-- **Preferred:** push a branch or open a PR. The `test` job in
+- **Preferred:** open a PR against `main`. The `test` job in
   `.github/workflows/build-and-release.yml` runs `test/connection-test.js`
   against a SQL Server service container for every runtime in `versions.json`.
+  The `Layer checks passed` job passes only when every build and test passed;
+  it is the status check `main` requires before a PR can merge.
 - **Interactive:** use the XPS test copy for this repo (see
   Roundhouse-Infrastructure `docs/xps-github-runners.md`) and run the test
   there against its SQL Server:
@@ -80,7 +82,8 @@ DB_SERVER=127.0.0.1 DB_USER=sa DB_PWD='<sa password>' DB_NAME=master \
 
 The GitHub Actions workflow automatically:
 
-1. Builds layers for the runtimes in `versions.json` (20, 22, and 24)
+1. Builds layers for the runtimes in `versions.json` (20, 22, and 24), on every
+   PR to `main` and on pushes to `main`
 2. Tests each layer against SQL Server in CI
 3. Publishes to Production AWS account (344349181969) on version tags
 
@@ -94,8 +97,7 @@ policy first. The workflow already requests `contents: write` and
 
 After enabling the setting, run **Check for Runtime Updates** manually and verify
 that it creates an update PR when changes are available. Builds and SQL Server
-tests currently run on pushes to `main`; generated PR changes still need
-validation before merge.
+tests run on that PR like any other, and Dependabot auto-merge waits for them.
 
 ## Package Versions
 
